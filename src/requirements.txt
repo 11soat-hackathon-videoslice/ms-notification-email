@@ -1,0 +1,13 @@
+pytest
+pytest-cov
+pytest-mock
+pytest-asyncio
+moto
+boto3
+requests
+requests-aws4auth
+opencv-python-headless==4.10.0.84
+Pillow>=12.1.1
+numpy==1.26.4
+
+vdsc-core @ git+https://github.com/11soat-hackton-videoslice/video-slice-core.git@develop

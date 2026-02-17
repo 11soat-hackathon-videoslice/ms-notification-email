@@ -1,0 +1,21 @@
+{
+  "Records": [
+    {
+      "messageId": "b22abd8b-bc65-49ac-ac27-35cb0c8f4e25",
+      "receiptHandle": "AQEBiFJ77Y0/+3PQMeBB8kYsgZmx3QZ/1bXXAIfv5qQkwvWjYZXmp1QDWAJAcyCD/ZUAu7FLKoVVRSfJEkKxhqUq4Uw5qX0Ac4PgEmGd45e6v+aMSZzoLA3HFjHi+gJYGI/89EXb51c2xlZZ0fjf8wkAl+oRZnecdBt7r/3/2QpbjhnGwt/I5ffOGgn4vCgPy+E2GvH7RV01TidGoiyxwq47M7I1tkHIaZmZIOw3PyufwSh7zFUQsmXyDb2+0vTGgkTT5yjePJI14uJTCGVvopZ8cUDQ/Qgd3eNxskkBTmWscRX/bHSyzLpNxDJ0IXbamvDk296J/5TvEA1pRNQnd41T6XgGUq3Jx0nKmmWdled/T0E3Q8IZx66eiIkp0Lvfi9UiRnDlIIkv3/WnVB4DfYr4rQ==",
+      "body": "{\"account\":\"080145351546\",\"detail\":{\"channels\":[\"EMAIL\",\"WEB\"],\"content\":[{\"email\":{\"template\":\"###TEMPLATE###\",\"user_id\":\"848834a8-20e1-7004-ee3b-4ba1495239d8\"},\"web\":{\"message\":\"Teste de Notificação Manual)\",\"timestamp\":\"###TIMESTAMP###\",\"user_id\":\"848834a8-20e1-7004-ee3b-4ba1495239d8\"}}],\"id\":\"###ID###\",\"metadata\":{\"created\":\"2026-01-26 17:13:10\",\"endTime\":8,\"fileExtension\":\"mp4\",\"fileName\":\"Video Project 1\",\"logs\":[],\"maxRetries\":3,\"resize\":\"medium\",\"retries\":0,\"startTime\":2,\"status\":\"UPLOADED\",\"intervalTime\":[\"2\",\"3\",\"4\",\"5\",\"6\",\"7\",\"8\"],\"totalTime\":10,\"unitTime\":\"s\",\"userId\":\"848834a8-20e1-7004-ee3b-4ba1495239d8\",\"videoId\":\"mkvltfiozmaT\",\"qualityOutputLevel\":\"80\"}},\"detail-type\":\"VideoSlice Notification\",\"id\":\"79cdb25a-2d73-33b8-a2a2-e67db110961a\",\"region\":\"us-east-1\",\"resources\":[],\"source\":\"vdsc.notification\",\"time\":\"2026-02-09T10:44:00Z\",\"version\":\"0\"}",
+      "attributes": {
+        "ApproximateReceiveCount": "1",
+        "SentTimestamp": "1770301506645",
+        "SenderId": "AROARFKIJAN5FITLMQ6SR:0ae57debe57431e69bbf0909913a2646",
+        "ApproximateFirstReceiveTimestamp": "1770301506652"
+      },
+      "messageAttributes": {},
+      "md5OfMessageAttributes": null,
+      "md5OfBody": "f406634cb996416eb193d84c19842dfe",
+      "eventSource": "aws:sqs",
+      "eventSourceARN": "arn:aws:sqs:us-east-1:080145351546:vdsc-prd-sqs-video-slice",
+      "awsRegion": "us-east-1"
+    }
+  ]
+}

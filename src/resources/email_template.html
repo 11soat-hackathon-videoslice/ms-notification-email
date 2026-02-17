@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Slice - Notificação</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; background-color: #f5f7fa;">
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f5f7fa;">
+    <tr>
+        <td style="padding: 20px 0;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="margin: 0 auto; background-color: #ffffff; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); border-radius: 8px; overflow: hidden;">
+                <!-- Header -->
+                <tr>
+                    <td style="background: linear-gradient(135deg, #24285c 0%, #5a3d9a 100%); padding: 12px 32px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);">
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                            <tr>
+                                <td style="vertical-align: middle; text-align: center">
+                                    <h1 style="margin: 0; padding: 0; color: #ffffff; font-size: 20px; font-weight: 600; line-height: 1.2;">
+                                        Video Slice
+                                    </h1>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                <!-- Content -->
+                <tr>
+                    <td style="padding: 20px 32px; position: relative; background-image: url({{logo_url}}); background-position: center center; background-repeat: no-repeat; background-size: 325px auto; background-blend-mode: overlay;">
+                        <div style="position: relative; z-index: 1; background-color: rgba(255, 255, 255, 0.90); padding: 18px; border-radius: 8px;">
+                            <h2 style="margin: 0 0 10px 0; color: #0a0e1a; font-size: 20px; font-weight: 600; line-height: 1.2;">
+                                {{title}}
+                            </h2>
+                            <p style="margin: 0 0 12px 0; color: #4a5568; font-size: 16px; line-height: 1.45;">
+                                {{message}}
+                            </p>
+
+                            <!-- Optional: Video Details -->
+                            <div style="background-color: rgba(245, 247, 250, 0.3); border-left: 4px solid rgba(84, 97, 208, 0.4); padding: 12px; margin: 14px 0; border-radius: 4px;">
+                                <p style="margin: 0 0 6px 0; color: #2d3748; font-size: 14px; font-weight: 600;">
+                                    Detalhes do Vídeo:
+                                </p>
+                                <p style="margin: 0 0 3px 0; color: #4a5568; font-size: 14px; line-height: 1.35;">
+                                    <strong>Arquivo:</strong> {{video_name}}
+                                </p>
+                                <p style="margin: 0 0 3px 0; color: #4a5568; font-size: 14px; line-height: 1.35;">
+                                    <strong>Status:</strong> {{status}}
+                                </p>
+                                <p style="margin: 0; color: #4a5568; font-size: 14px; line-height: 1.35;">
+                                    <strong>Data:</strong> {{date}}
+                                </p>
+                            </div>
+
+                            <!-- Optional: Action Button -->
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 16px auto 0 auto;">
+                                <tr>
+                                    <td style="border-radius: 6px; background: linear-gradient(135deg, #4c51bf 0%, #5a3d9a 100%); box-shadow: 0 4px 15px rgba(76, 81, 191, 0.3); text-align: center;">
+                                        <a href="{{dashboard_url}}" target="_blank" style="display: inline-block; padding: 11px 26px; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600; border-radius: 6px;">
+                                            Acessar Dashboard
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </td>
+                </tr>
+
+                <!-- Footer -->
+                <tr>
+                    <td style="background-color: #f5f7fa; padding: 16px 32px; border-top: 1px solid #e2e8f0;">
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                            <tr>
+                                <td style="vertical-align: top; width: 90px;">
+                                    <img src="{{logo_url}}" alt="Video Slice" style="width: 75px; height: 75px; display: block; object-fit: contain; opacity: 1;" />
+                                </td>
+                                <td style="vertical-align: middle; padding-left: 16px;">
+                                    <p style="margin: 0 0 3px 0; color: #2d3748; font-size: 14px; font-weight: 600; line-height: 1.4;">
+                                        Video Slice
+                                    </p>
+                                    <p style="margin: 0 0 3px 0; color: #718096; font-size: 13px; line-height: 1.4;">
+                                        Sistema de captura de imagens de vídeo
+                                    </p>
+                                    <p style="margin: 0 0 6px 0; color: #718096; font-size: 13px; line-height: 1.4;">
+                                        © 2026 Video Slice. Todos os direitos reservados.
+                                    </p>
+                                    <p style="margin: 0; color: #cbd5e0; font-size: 11px; line-height: 1.3;">
+                                        {{notification_id}}
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>
