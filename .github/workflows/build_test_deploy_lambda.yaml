@@ -31,6 +31,7 @@ env:
   FUNCTION_NAME: ${{ vars.FUNCTION_NAME }}
   PYTHON_VERSION: '3.12'
   VDSC_PAT: ${{ secrets.VDSC_PAT }}
+  S3_BUCKET_NAME: ${{ vars.S3_BUCKET_NAME }}
 
 jobs:
   tests-and-coverage:
