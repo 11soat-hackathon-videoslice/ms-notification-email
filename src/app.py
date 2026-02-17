@@ -6,7 +6,7 @@ from core.adapters.notification.notification_controller import NotificationContr
 from core.dtos import NotificationDto
 from core.enums import NotificationChannelsEnum
 
-from src.aws.email.email_producer import EmailNotificationProducer
+from aws.email.email_producer import EmailNotificationProducer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

@@ -1,7 +1,8 @@
+from . import config
 from . import email
 
+from .config import (NotificationEmailConfig, config,)
 from .email import (EmailNotificationProducer, config, email_producer, logger,)
-from .config import NotificationEmailConfig
 
-__all__ = ['EmailNotificationProducer', 'config', 'email', 'email_producer',
-           'logger','NotificationEmailConfig']
+__all__ = ['EmailNotificationProducer', 'NotificationEmailConfig', 'config',
+           'email', 'email_producer', 'logger']
