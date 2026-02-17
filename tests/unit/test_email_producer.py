@@ -165,7 +165,7 @@ class TestEmailNotificationProducer:
             with patch.object(producer, '_get_user_details', return_value={'email': 'test@example.com', 'name': 'Test User'}):
                 with patch.object(producer, '_get_body_template', return_value='<html>Test</html>'):
                     with patch.object(producer, '_get_subject_template', return_value='Test'):
-                        with pytest.raises(Exception, match="Erro ao enviar email"):
+                        with pytest.raises(ClientError, match="Erro ao enviar email"):
                             producer.send(notification_dto)
 
     def test_send_client_error(self, notification_dto):

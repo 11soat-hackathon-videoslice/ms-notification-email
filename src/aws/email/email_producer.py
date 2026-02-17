@@ -8,7 +8,7 @@ import boto3
 from botocore.exceptions import ClientError
 
 from core.interfaces import NotificationDatasourceInterface
-from core.dtos import NotificationDto, EmailPayloadDto, NotificationContentDto
+from core.dtos import NotificationDto
 from core.enums import EmailTemplateEnum
 from core.domain import VdscMetadata
 from aws.config import NotificationEmailConfig
@@ -40,7 +40,10 @@ class EmailNotificationProducer(NotificationDatasourceInterface):
             )
             if response and response.get('ResponseMetadata', {}).get('HTTPStatusCode') != 200:
                 logger.error(f"Erro ao enviar email: {response}")
-                raise ClientError(f"Erro ao enviar email: {response}")
+                raise ClientError(
+                    {'Error': {'Code': 'SendEmailError', 'Message': f'Erro ao enviar email: {response}'}},
+                    'SendEmail'
+                )
             logger.info(f"Email enviado para {user_details['email']} com subject: {subject}")
         except ClientError as e:
             logger.error(f"Erro ao enviar email: {str(e)}")
