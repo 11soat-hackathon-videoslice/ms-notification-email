@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vdsc-notification-email"
+version = "1.0.0"
+description = "Microserviço responsável por persistir notificações por e-mail"
+authors = [
+    { name="Tito Parizotto", email="titoparizotto@gmail.com" }
+]
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.8"
+dependencies = [
+    "requests>=2.25.0",
+    "requests-aws4auth>=0.9.0",
+    "boto3>=1.20.0",
+    "opencv-python-headless==4.10.0.84",
+    "Pillow>=12.1.1",
+    "numpy==1.26.4",
+    "pytest",
+    "pytest-cov",
+    "pytest-mock"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/11soat-hackton-videoslice/ms-notification-email"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "unit: marca testes unitários"
+]
