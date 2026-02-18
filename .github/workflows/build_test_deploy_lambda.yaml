@@ -3,6 +3,8 @@ name: Build, Test and Deploy vdsc-prd-lmb-notification-email
 permissions:
   id-token: write
   contents: read
+  issues: write
+  pull-requests: write
 
 on:
   workflow_dispatch:
