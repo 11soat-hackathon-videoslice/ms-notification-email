@@ -110,16 +110,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      - name: Atualizar requirements.txt com branch correto
+      - name: Atualizar requirements.txt com versão/commit correto
         run: |
-          CORE_BRANCH="${{ steps.determine-branch.outputs.CORE_BRANCH }}"
-          echo "🔄 Atualizando requirements.txt para usar video-slice-core@${CORE_BRANCH}"
+          CORE_VERSION="${{ steps.determine-branch.outputs.CORE_VERSION }}"
+          echo "🔄 Atualizando requirements.txt para usar video-slice-core@${CORE_VERSION}"
           
           # Criar backup do arquivo original
           cp src/requirements.txt src/requirements.txt.backup
           
           # Substituir a linha de vdsc-core no requirements.txt (HTTPS com PAT)
-          sed -i "s|vdsc-core @ .*video-slice-core.*|vdsc-core @ git+https://github.com/11soat-hackton-videoslice/video-slice-core.git@${CORE_BRANCH}|g" src/requirements.txt
+          sed -i "s|vdsc-core @ .*video-slice-core.*|vdsc-core @ git+https://github.com/11soat-hackton-videoslice/video-slice-core.git@${CORE_VERSION}|g" src/requirements.txt
           
           echo "📋 Conteúdo atualizado de requirements.txt:"
           cat src/requirements.txt
@@ -127,10 +127,10 @@ jobs:
           # Validar que o arquivo foi atualizado corretamente
           echo ""
           echo "🔍 Validando requirements.txt..."
-          if grep -q "vdsc-core @ git+https://github.com/11soat-hackton-videoslice/video-slice-core.git@${CORE_BRANCH}" src/requirements.txt; then
-            echo "✅ Branch correta detectada no requirements.txt"
+          if grep -q "vdsc-core @ git+https://github.com/11soat-hackton-videoslice/video-slice-core.git@${CORE_VERSION}" src/requirements.txt; then
+            echo "✅ Versão/commit correto detectado no requirements.txt"
           else
-            echo "❌ ERRO: Branch não foi atualizada corretamente em requirements.txt"
+            echo "❌ ERRO: Versão/commit não foi atualizado corretamente em requirements.txt"
             echo "📋 Comparando original com atualizado:"
             echo "--- Original:"
             cat src/requirements.txt.backup
@@ -380,16 +380,16 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
 
-      - name: Atualizar requirements.txt com branch correto
+      - name: Atualizar requirements.txt com versão/commit correto
         run: |
-          CORE_BRANCH="${{ steps.determine-branch.outputs.CORE_BRANCH }}"
-          echo "🔄 Atualizando requirements.txt para usar video-slice-core@${CORE_BRANCH}"
+          CORE_VERSION="${{ steps.determine-branch.outputs.CORE_VERSION }}"
+          echo "🔄 Atualizando requirements.txt para usar video-slice-core@${CORE_VERSION}"
           
           # Criar backup do arquivo original
           cp src/requirements.txt src/requirements.txt.backup
           
           # Substituir a linha de vdsc-core no requirements.txt (HTTPS com PAT)
-          sed -i "s|vdsc-core @ .*video-slice-core.*|vdsc-core @ git+https://github.com/11soat-hackton-videoslice/video-slice-core.git@${CORE_BRANCH}|g" src/requirements.txt
+          sed -i "s|vdsc-core @ .*video-slice-core.*|vdsc-core @ git+https://github.com/11soat-hackton-videoslice/video-slice-core.git@${CORE_VERSION}|g" src/requirements.txt
           
           echo "📋 Conteúdo atualizado de requirements.txt:"
           cat src/requirements.txt
@@ -397,10 +397,10 @@ jobs:
           # Validar que o arquivo foi atualizado corretamente
           echo ""
           echo "🔍 Validando requirements.txt..."
-          if grep -q "vdsc-core @ git+https://github.com/11soat-hackton-videoslice/video-slice-core.git@${CORE_BRANCH}" src/requirements.txt; then
-            echo "✅ Branch correta detectada no requirements.txt"
+          if grep -q "vdsc-core @ git+https://github.com/11soat-hackton-videoslice/video-slice-core.git@${CORE_VERSION}" src/requirements.txt; then
+            echo "✅ Versão/commit correto detectado no requirements.txt"
           else
-            echo "❌ ERRO: Branch não foi atualizada corretamente em requirements.txt"
+            echo "❌ ERRO: Versão/commit não foi atualizado corretamente em requirements.txt"
             echo "📋 Comparando original com atualizado:"
             echo "--- Original:"
             cat src/requirements.txt.backup
