@@ -1,4 +1,4 @@
-name: Build, Test and Deploy vdsc-prd-lmb-notification-email
+name: Build, Test and Deploy ms-notification-email
 
 permissions:
   id-token: write
@@ -21,7 +21,10 @@ on:
     paths:
       - 'src/**'
       - 'tests/**'
+      - '.github/workflows/build_test_deploy_lambda.yaml'
+
   pull_request:
+    types: [closed]
     branches:
       - master
     paths:
@@ -29,290 +32,116 @@ on:
       - 'tests/**'
 
 env:
-  AWS_REGION: ${{ vars.AWS_REGION }}
   FUNCTION_NAME: ${{ vars.FUNCTION_NAME }}
   PYTHON_VERSION: '3.12'
-  VDSC_PAT: ${{ secrets.VDSC_PAT }}
   S3_BUCKET_NAME: ${{ vars.S3_BUCKET_NAME }}
+  CORE_REPO: 11soat-hackathon-videoslice/video-slice-core
 
 jobs:
+  resolve-core-version:
+    name: Obter versão do vdsc-core
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.merged == true
+    outputs:
+      core_version: ${{ steps.resolve.outputs.CORE_VERSION }}
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Resolver versão do vdsc-core
+        id: resolve
+        run: |
+          # Extrair a tag informada no requirements.txt (ex: v1.0.0)
+          TAG_FROM_REQ=$(grep 'vdsc-core @' src/requirements.txt | sed -E 's/.*@([^[:space:]]+)$/\1/')
+          echo "📋 Tag encontrada no requirements.txt: ${TAG_FROM_REQ}"
+
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.base_ref }}" = "master" ]; then
+            # PR para master: usar a tag exata do requirements.txt
+            CORE_VERSION="${TAG_FROM_REQ}"
+            echo "📌 PR para master → usando tag da release: ${CORE_VERSION}"
+          else
+            # develop (push/workflow_dispatch): buscar último commit com pipeline bem-sucedida
+            echo "📌 Branch develop → buscando último commit com pipeline bem-sucedida..."
+
+            API_URL="https://api.github.com/repos/${{ env.CORE_REPO }}/actions/runs?branch=develop&status=success&per_page=1"
+            echo "🔍 API URL: ${API_URL}"
+
+            API_RESPONSE=$(curl -s -w "\n%{http_code}" -H "Authorization: token ${{ secrets.VDSC_PAT }}" "${API_URL}")
+            HTTP_CODE=$(echo "$API_RESPONSE" | tail -1)
+            RESPONSE_BODY=$(echo "$API_RESPONSE" | sed '$d')
+
+            echo "📡 HTTP Status: ${HTTP_CODE}"
+
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "⚠️ API retornou status ${HTTP_CODE}, usando fallback: develop"
+              echo "📋 Resposta: $(echo "$RESPONSE_BODY" | jq -r '.message // .' 2>/dev/null)"
+              CORE_VERSION="develop"
+            else
+              TOTAL_COUNT=$(echo "$RESPONSE_BODY" | jq -r '.total_count // 0')
+              echo "📊 Total de runs bem-sucedidas: ${TOTAL_COUNT}"
+
+              SUCCESSFUL_SHA=$(echo "$RESPONSE_BODY" | jq -r '.workflow_runs[0].head_sha // empty')
+
+              if [ -z "$SUCCESSFUL_SHA" ]; then
+                echo "⚠️ Nenhum commit bem-sucedido encontrado, usando fallback: develop"
+                CORE_VERSION="develop"
+              else
+                CORE_VERSION="${SUCCESSFUL_SHA}"
+                echo "✅ Último commit bem-sucedido: ${CORE_VERSION}"
+              fi
+            fi
+          fi
+
+          echo "CORE_VERSION=${CORE_VERSION}" >> $GITHUB_OUTPUT
+
   tests-and-coverage:
     name: Testes e Quality Gate
     runs-on: ubuntu-latest
-    if: (github.event.inputs.deploy_only == 'false' &&  github.event_name == 'workflow_dispatch') || (github.event_name == 'push' || github.event_name == 'pull_request')
+    needs: resolve-core-version
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_only == 'false') ||
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
     steps:
       - name: Checkout do código
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Configurar Autenticação HTTPS com PAT para repositórios privados
+      - name: Atualizar requirements.txt com versão do vdsc-core
         run: |
-          echo "🔐 Configurando autenticação HTTPS com PAT..."
-          
-          # Verificar se VDSC_PAT foi configurado
-          if [ -z "${{ secrets.VDSC_PAT }}" ]; then
-            echo "❌ ERRO: VDSC_PAT não configurado"
-            exit 1
-          else
-            echo "✅ VDSC_PAT detectado"
-            # Configurar git com autenticação HTTPS usando PAT
+          CORE_VERSION="${{ needs.resolve-core-version.outputs.core_version }}"
+          echo "🔄 Atualizando vdsc-core para @${CORE_VERSION}"
+          sed -i "s|vdsc-core @ .*|vdsc-core @ git+https://${{ secrets.VDSC_PAT }}@github.com/${{ env.CORE_REPO }}.git@${CORE_VERSION}|" src/requirements.txt
+          echo "📋 requirements.txt atualizado (URL com autenticação embutida)"
 
-            git config --global url."https://${{ secrets.VDSC_PAT }}@github.com/".insteadOf "ssh://git@github.com/"
-            git config --global url."https://${{ secrets.VDSC_PAT }}@github.com/".insteadOf "git@github.com:"
-            git config --global url."https://${{ secrets.VDSC_PAT }}@github.com/".insteadOf "https://github.com/"
-
-            echo "✅ Autenticação HTTPS com PAT configurada"
-          fi
-
-      - name: Determinar versão/branch do video-slice-core
-        id: determine-branch
-        run: |
-          # Verificar se é pull_request para master
-          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.base_ref }}" = "master" ]; then
-            echo "📌 Pull request para master detectado"
-            echo "🔍 Buscando última release do video-slice-core..."
-            
-            # Buscar a última release usando GitHub API
-            LATEST_RELEASE=$(curl -s -H "Authorization: token ${{ secrets.VDSC_PAT }}" \
-              "https://api.github.com/repos/11soat-hackton-videoslice/video-slice-core/releases/latest" \
-              | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-            
-            if [ -z "$LATEST_RELEASE" ]; then
-              echo "❌ ERRO: Não foi possível obter a última release"
-              echo "ℹ️  Usando fallback: master"
-              CORE_VERSION="master"
-            else
-              CORE_VERSION="$LATEST_RELEASE"
-              echo "✅ Última release encontrada: ${LATEST_RELEASE}"
-            fi
-            
-            echo "✅ Usando video-slice-core@${CORE_VERSION}"
-            
-          else
-            # Determinar a branch atual
-            if [ "${{ github.event_name }}" = "pull_request" ]; then
-              BRANCH="${{ github.head_ref }}"
-              echo "📌 Branch detectada (pull_request): ${BRANCH}"
-            else
-              BRANCH="${{ github.ref_name }}"
-              echo "📌 Branch detectada (push/workflow_dispatch): ${BRANCH}"
-            fi
-            
-            # Se for develop, buscar último commit com pipeline bem-sucedida
-            if [ "${BRANCH}" = "develop" ]; then
-              echo "📌 Branch develop detectada"
-              echo "🔍 Buscando último commit com pipeline bem-sucedida no video-slice-core..."
-              
-              # Buscar workflows bem-sucedidos na branch develop
-              SUCCESSFUL_RUN=$(curl -s -H "Authorization: token ${{ secrets.VDSC_PAT }}" \
-                "https://api.github.com/repos/11soat-hackton-videoslice/video-slice-core/actions/runs?branch=develop&status=success&per_page=1" \
-                | grep -m 1 '"head_sha":' | sed -E 's/.*"([^"]+)".*/\1/')
-              
-              if [ -z "$SUCCESSFUL_RUN" ]; then
-                echo "⚠️ Aviso: Não foi possível obter o último commit bem-sucedido"
-                echo "ℹ️  Usando fallback: develop (branch)"
-                CORE_VERSION="develop"
-              else
-                CORE_VERSION="$SUCCESSFUL_RUN"
-                echo "✅ Último commit bem-sucedido encontrado: ${SUCCESSFUL_RUN}"
-              fi
-              
-              echo "✅ Usando video-slice-core@${CORE_VERSION}"
-              
-            else
-              # Para outras branches, usar a própria branch
-              CORE_VERSION="${BRANCH}"
-              echo "✅ Usando video-slice-core@${BRANCH}"
-            fi
-          fi
-          
-          echo "CORE_VERSION=${CORE_VERSION}" >> $GITHUB_OUTPUT
-
-      - name: Configurar Python ${{ vars.PYTHON_VERSION }}
+      - name: Configurar Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
 
-      - name: Cache de dependências Python
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Atualizar requirements.txt com versão/commit correto
-        run: |
-          CORE_VERSION="${{ steps.determine-branch.outputs.CORE_VERSION }}"
-          echo "🔄 Atualizando requirements.txt para usar video-slice-core@${CORE_VERSION}"
-          
-          # Criar backup do arquivo original
-          cp src/requirements.txt src/requirements.txt.backup
-          
-          # Substituir a linha de vdsc-core no requirements.txt (HTTPS com PAT)
-          sed -i "s|vdsc-core @ .*video-slice-core.*|vdsc-core @ git+https://github.com/11soat-hackton-videoslice/video-slice-core.git@${CORE_VERSION}|g" src/requirements.txt
-          
-          echo "📋 Conteúdo atualizado de requirements.txt:"
-          cat src/requirements.txt
-          
-          # Validar que o arquivo foi atualizado corretamente
-          echo ""
-          echo "🔍 Validando requirements.txt..."
-          if grep -q "vdsc-core @ git+https://github.com/11soat-hackton-videoslice/video-slice-core.git@${CORE_VERSION}" src/requirements.txt; then
-            echo "✅ Versão/commit correto detectado no requirements.txt"
-          else
-            echo "❌ ERRO: Versão/commit não foi atualizado corretamente em requirements.txt"
-            echo "📋 Comparando original com atualizado:"
-            echo "--- Original:"
-            cat src/requirements.txt.backup
-            echo "--- Atualizado:"
-            cat src/requirements.txt
-            exit 1
-          fi
-          
-          # Validar linhas vazias e sintaxe
-          if grep -q "^[[:space:]]*$" src/requirements.txt; then
-            echo "⚠️ Aviso: Removendo linhas em branco extras..."
-            sed -i '/^[[:space:]]*$/d' src/requirements.txt
-          fi
-
       - name: Instalar dependências
         run: |
-          echo "📦 Iniciando instalação de dependências..."
           python -m pip install --upgrade pip
-          echo "✅ pip atualizado com sucesso"
-          
-          echo ""
-          echo "📦 Instalando dependências de teste..."
-          pip install pytest pytest-cov pytest-mock boto3 moto requests opencv-python-headless
-          echo "✅ Dependências de teste instaladas"
-          
-          if [ -f src/requirements.txt ]; then
-            echo ""
-            echo "📦 Instalando dependências da aplicação (incluindo vdsc-core)..."
-            pip install -r src/requirements.txt
-          
-            if [ $? -ne 0 ]; then
-              echo "❌ ERRO: Falha ao instalar dependências de src/requirements.txt"
-              echo "🔍 Tentando diagnóstico..."
-              echo "Conteúdo de src/requirements.txt:"
-              cat src/requirements.txt
-              exit 1
-            fi
-            echo "✅ Dependências da aplicação instaladas com sucesso"
-          else
-            echo "❌ ERRO: Arquivo src/requirements.txt não encontrado"
-            exit 1
-          fi
+          pip install -r src/requirements.txt
 
       - name: Validar instalação do vdsc-core
         run: |
-          echo "🔍 Validando instalação do vdsc-core..."
-          echo ""
-          echo "📋 Diretórios do site-packages:"
-          python -c "import site; print('\n'.join(site.getsitepackages()))"
-          echo ""
-          echo "🔍 Procurando por 'core' nos site-packages:"
-          python -c "import site; import os; [print(p) for sp in site.getsitepackages() for p in os.listdir(sp) if 'core' in p.lower()]" || echo "Nenhum 'core' encontrado diretamente"
-          echo ""
-          
-          python << 'EOF'
-          import sys
-          import os
-          
-          print("🔍 Tentando importar core...")
-          
-          try:
-              # Primeiro, verificar se o diretório core existe
-              import site
-              for sp in site.getsitepackages():
-                  core_path = os.path.join(sp, 'core')
-                  if os.path.exists(core_path):
-                      print(f"✅ Diretório 'core' encontrado em: {core_path}")
-                      print(f"   Conteúdo: {os.listdir(core_path)}")
-          
-              # Tentar importar
-              import core
-              print("✅ vdsc-core importado com sucesso!")
-              print(f"   Localização: {core.__file__}")
-          
-              # Listar submódulos
-              import pkgutil
-              print("\n📦 Módulos disponíveis em core:")
-              modules = []
-              for importer, modname, ispkg in pkgutil.iter_modules(core.__path__):
-                  modules.append(modname)
-                  print(f"   - {modname}")
-          
-              if not modules:
-                  print("   (nenhum submódulo encontrado)")
-          
-              # Versão
-              if hasattr(core, '__version__'):
-                  print(f"\n🏷️  Versão: {core.__version__}")
-          
-              print("\n✅ Validação bem-sucedida!")
-          
-          except ImportError as e:
-              print(f"❌ ERRO ao importar core: {e}")
-              print(f"\n📋 PYTHONPATH: {sys.path}")
-          
-              # Tentar diagnóstico adicional
-              import site
-              print(f"\n📋 site-packages paths:")
-              for sp in site.getsitepackages():
-                  print(f"   {sp}")
-                  if os.path.exists(sp):
-                      items = os.listdir(sp)
-                      core_items = [i for i in items if 'core' in i.lower() or 'vdsc' in i.lower()]
-                      if core_items:
-                          print(f"      Itens relacionados a core/vdsc: {core_items}")
-          
-              sys.exit(1)
-          EOF
-          
-          if [ $? -ne 0 ]; then
-            echo ""
-            echo "❌ Validação do vdsc-core falhou"
-            echo "📋 Tentando listar todos os pacotes instalados:"
-            pip list | grep -i core || echo "Nenhum pacote 'core' encontrado"
-            pip list | grep -i vdsc || echo "Nenhum pacote 'vdsc' encontrado"
-            exit 1
-          fi
-          echo ""
-          echo "✅ vdsc-core validado com sucesso!"
+          python -c "import core; print(f'✅ vdsc-core importado: {core.__file__}')"
 
       - name: Executar testes com cobertura
         run: |
           export PYTHONPATH=$PYTHONPATH:$(pwd)/src
           pytest tests/ --cov=src --cov-report=xml:coverage.xml --cov-report=html --junitxml=test-results.xml -v
 
-      - name: Verificar e corrigir arquivo de cobertura
+      - name: Corrigir caminhos no coverage.xml
         run: |
-          ls -la
-          if [ -f coverage.xml ]; then
-            echo "✅ coverage.xml encontrado"
-            echo "📋 Conteúdo antes da correção:"
-            head -30 coverage.xml
-          
-            echo ""
-            echo "🔧 Corrigindo caminhos absolutos no coverage.xml..."
-            # Remover completamente a seção <sources>...</sources>
-            sed -i '/<sources>/,/<\/sources>/d' coverage.xml
-            # Adicionar prefixo src/ aos filenames que não começam com src/
-            sed -i 's|filename="|filename="src/|g' coverage.xml
-            # Corrigir casos onde src/ foi duplicado
-            sed -i 's|filename="src/src/|filename="src/|g' coverage.xml
-          
-            echo ""
-            echo "📋 Conteúdo após a correção:"
-            head -30 coverage.xml
-          else
-            echo "❌ coverage.xml NÃO encontrado"
-            exit 1
-          fi
+          sed -i '/<sources>/,/<\/sources>/d' coverage.xml
+          sed -i 's|filename="|filename="src/|g' coverage.xml
+          sed -i 's|filename="src/src/|filename="src/|g' coverage.xml
 
       - name: Upload de relatório de cobertura
         uses: actions/upload-artifact@v4
@@ -333,11 +162,11 @@ jobs:
     name: Aprovação Manual
     runs-on: ubuntu-latest
     needs: tests-and-coverage
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
     environment:
       name: production-approval
     steps:
-      - name: Manual Approval
+      - name: Aprovação Manual
         uses: trstringer/manual-approval@v1
         with:
           secret: ${{ secrets.GITHUB_TOKEN }}
@@ -347,264 +176,84 @@ jobs:
   build-and-deploy:
     name: Build e Deploy na AWS
     runs-on: ubuntu-latest
-    needs: [ tests-and-coverage, approval ]
+    needs: [resolve-core-version, tests-and-coverage, approval]
     if: |
       always() &&
-      (needs.tests-and-coverage.result == 'success' || 
+      (needs.tests-and-coverage.result == 'success' ||
        (needs.tests-and-coverage.result == 'skipped' && github.event.inputs.deploy_only == 'true')) &&
+      needs.resolve-core-version.result == 'success' &&
       ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/develop' ||
        github.event_name == 'pull_request' && needs.approval.result == 'success')
-    # Se for push na develop: executa direto após tests-and-coverage (approval será skipped)
-    # Se for pull_request para master: só executa após aprovação manual bem-sucedida
-
     steps:
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      - name: Configurar Autenticação HTTPS com PAT para repositórios privados
+      - name: Atualizar requirements.txt com versão do vdsc-core
         run: |
-          echo "🔐 Configurando autenticação HTTPS com PAT..."
-          
-          # Verificar se VDSC_PAT foi configurado
-          if [ -z "${{ secrets.VDSC_PAT }}" ]; then
-            echo "⚠️  Aviso: VDSC_PAT não configurado em Secrets"
-            echo "ℹ️  A pipeline tentará continuar sem autenticação"
-          else
-            echo "✅ VDSC_PAT detectado"
-            # Configurar git com autenticação HTTPS usando PAT
-            git config --global url."https://${{ secrets.VDSC_PAT }}@github.com/".insteadOf "https://github.com/"
-            echo "✅ Autenticação HTTPS com PAT configurada"
-          fi
+          CORE_VERSION="${{ needs.resolve-core-version.outputs.core_version }}"
+          echo "🔄 Atualizando vdsc-core para @${CORE_VERSION}"
+          sed -i "s|vdsc-core @ .*|vdsc-core @ git+https://${{ secrets.VDSC_PAT }}@github.com/${{ env.CORE_REPO }}.git@${CORE_VERSION}|" src/requirements.txt
+          echo "📋 requirements.txt atualizado (URL com autenticação embutida)"
 
-      - name: Determinar versão/branch do video-slice-core
-        id: determine-branch
-        run: |
-          # Verificar se é pull_request para master
-          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.base_ref }}" = "master" ]; then
-            echo "📌 Pull request para master detectado"
-            echo "🔍 Buscando última release do video-slice-core..."
-            
-            # Buscar a última release usando GitHub API
-            LATEST_RELEASE=$(curl -s -H "Authorization: token ${{ secrets.VDSC_PAT }}" \
-              "https://api.github.com/repos/11soat-hackton-videoslice/video-slice-core/releases/latest" \
-              | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-            
-            if [ -z "$LATEST_RELEASE" ]; then
-              echo "❌ ERRO: Não foi possível obter a última release"
-              echo "ℹ️  Usando fallback: master"
-              CORE_VERSION="master"
-            else
-              CORE_VERSION="$LATEST_RELEASE"
-              echo "✅ Última release encontrada: ${LATEST_RELEASE}"
-            fi
-            
-            echo "✅ Usando video-slice-core@${CORE_VERSION}"
-            
-          else
-            # Determinar a branch atual
-            if [ "${{ github.event_name }}" = "pull_request" ]; then
-              BRANCH="${{ github.head_ref }}"
-              echo "📌 Branch detectada (pull_request): ${BRANCH}"
-            else
-              BRANCH="${{ github.ref_name }}"
-              echo "📌 Branch detectada (push/workflow_dispatch): ${BRANCH}"
-            fi
-            
-            # Se for develop, buscar último commit com pipeline bem-sucedida
-            if [ "${BRANCH}" = "develop" ]; then
-              echo "📌 Branch develop detectada"
-              echo "🔍 Buscando último commit com pipeline bem-sucedida no video-slice-core..."
-              
-              # Buscar workflows bem-sucedidos na branch develop
-              SUCCESSFUL_RUN=$(curl -s -H "Authorization: token ${{ secrets.VDSC_PAT }}" \
-                "https://api.github.com/repos/11soat-hackton-videoslice/video-slice-core/actions/runs?branch=develop&status=success&per_page=1" \
-                | grep -m 1 '"head_sha":' | sed -E 's/.*"([^"]+)".*/\1/')
-              
-              if [ -z "$SUCCESSFUL_RUN" ]; then
-                echo "⚠️ Aviso: Não foi possível obter o último commit bem-sucedido"
-                echo "ℹ️  Usando fallback: develop (branch)"
-                CORE_VERSION="develop"
-              else
-                CORE_VERSION="$SUCCESSFUL_RUN"
-                echo "✅ Último commit bem-sucedido encontrado: ${SUCCESSFUL_RUN}"
-              fi
-              
-              echo "✅ Usando video-slice-core@${CORE_VERSION}"
-              
-            else
-              # Para outras branches, usar a própria branch
-              CORE_VERSION="${BRANCH}"
-              echo "✅ Usando video-slice-core@${BRANCH}"
-            fi
-          fi
-          
-          echo "CORE_VERSION=${CORE_VERSION}" >> $GITHUB_OUTPUT
-
-      - name: Configurar Python ${{ vars.PYTHON_VERSION }}
+      - name: Configurar Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
 
-      - name: Atualizar requirements.txt com versão/commit correto
-        run: |
-          CORE_VERSION="${{ steps.determine-branch.outputs.CORE_VERSION }}"
-          echo "🔄 Atualizando requirements.txt para usar video-slice-core@${CORE_VERSION}"
-          
-          # Criar backup do arquivo original
-          cp src/requirements.txt src/requirements.txt.backup
-          
-          # Substituir a linha de vdsc-core no requirements.txt (HTTPS com PAT)
-          sed -i "s|vdsc-core @ .*video-slice-core.*|vdsc-core @ git+https://github.com/11soat-hackton-videoslice/video-slice-core.git@${CORE_VERSION}|g" src/requirements.txt
-          
-          echo "📋 Conteúdo atualizado de requirements.txt:"
-          cat src/requirements.txt
-          
-          # Validar que o arquivo foi atualizado corretamente
-          echo ""
-          echo "🔍 Validando requirements.txt..."
-          if grep -q "vdsc-core @ git+https://github.com/11soat-hackton-videoslice/video-slice-core.git@${CORE_VERSION}" src/requirements.txt; then
-            echo "✅ Versão/commit correto detectado no requirements.txt"
-          else
-            echo "❌ ERRO: Versão/commit não foi atualizado corretamente em requirements.txt"
-            echo "📋 Comparando original com atualizado:"
-            echo "--- Original:"
-            cat src/requirements.txt.backup
-            echo "--- Atualizado:"
-            cat src/requirements.txt
-            exit 1
-          fi
-          
-          # Validar linhas vazias e sintaxe
-          if grep -q "^[[:space:]]*$" src/requirements.txt; then
-            echo "⚠️ Aviso: Removendo linhas em branco extras..."
-            sed -i '/^[[:space:]]*$/d' src/requirements.txt
-          fi
-
       - name: Configurar AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Validar credenciais AWS
-        run: |
-          echo "🔍 Validando configuração AWS..."
-          aws sts get-caller-identity
-          echo "✅ Credenciais AWS configuradas corretamente"
-
-      - name: Preparar pacote de build-and-deploy
-        run: |
-          echo "📦 Preparando pacote de build-and-deploy..."
-          mkdir -p lambda-package
-          
-          if [ -f src/requirements.txt ]; then
-            echo "📋 Instalando dependências de src/requirements.txt..."
-            echo "🔍 Conteúdo do requirements.txt:"
-            cat src/requirements.txt
-            echo ""
-          
-            pip install -r src/requirements.txt -t lambda-package/ --quiet --no-cache-dir
-          
-            if [ $? -ne 0 ]; then
-              echo "❌ ERRO: Falha ao instalar dependências para o pacote Lambda"
-              exit 1
-            fi
-          
-            echo "✅ Dependências instaladas no lambda-package"
-          
-            # Validar que vdsc-core foi instalado
-            if [ -d "lambda-package/core" ]; then
-              echo "✅ vdsc-core detectado no pacote Lambda"
-              ls -la lambda-package/core/
-            else
-              echo "⚠️ Aviso: Diretório 'core' não encontrado no lambda-package (pode estar instalado de outra forma)"
-            fi
-          else
-            echo "❌ ERRO: Arquivo requirements.txt não encontrado"
-            exit 1
-          fi
-          
-          echo ""
-          echo "📋 Copiando código fonte..."
-          cp -r src/* lambda-package/
-          echo "✅ Código fonte copiado"
-          
-          echo ""
-          echo "🧹 Removendo arquivos desnecessários para reduzir tamanho..."
-          # Remover arquivos de cache e temporários
-          find lambda-package -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-          find lambda-package -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
-          find lambda-package -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
-          find lambda-package -type f -name "*.pyc" -delete 2>/dev/null || true
-          find lambda-package -type f -name "*.pyo" -delete 2>/dev/null || true
-          find lambda-package -type f -name "*.so" -exec strip {} \; 2>/dev/null || true
-          
-          # Remover testes e documentação de dependências
-          find lambda-package -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
-          find lambda-package -type d -name "test" -exec rm -rf {} + 2>/dev/null || true
-          find lambda-package -type f -name "*.md" -delete 2>/dev/null || true
-          find lambda-package -type f -name "*.txt" ! -name "requirements.txt" -delete 2>/dev/null || true
-          
-          # Remover dependências de teste se presentes
-          rm -rf lambda-package/pytest* 2>/dev/null || true
-          rm -rf lambda-package/moto* 2>/dev/null || true
-          rm -rf lambda-package/_pytest* 2>/dev/null || true
-          rm -rf lambda-package/coverage* 2>/dev/null || true
-          
-          echo "✅ Arquivos desnecessários removidos"
-          echo ""
-          echo "🗜️ Criando arquivo ZIP..."
-          cd lambda-package
-          zip -r ../$ZIP_NAME.zip . -q -9
-          cd ..
-          
-          PACKAGE_SIZE=$(ls -lh $ZIP_NAME.zip | awk '{print $5}')
-          echo "📊 Tamanho do pacote final: ${PACKAGE_SIZE}"
-          echo "✅ Pacote preparado com sucesso"
-
+      - name: Preparar pacote Lambda
         env:
-          PYTHON_REQUIRIMENTS: ${{ github.workspace }}/src/requirements.txt || {{vars.PYTHON_REQUIRIMENTS}}
-          ZIP_NAME: ${{env.FUNCTION_NAME}}
+          ZIP_NAME: ${{ env.FUNCTION_NAME }}
+        run: |
+          echo "📦 Preparando pacote Lambda..."
+          mkdir -p lambda-package
+
+          pip install -r src/requirements.txt -t lambda-package/ --quiet --no-cache-dir
+          cp -r src/* lambda-package/
+
+          echo "🧹 Removendo arquivos desnecessários..."
+          find lambda-package -type d \( -name "__pycache__" -o -name "*.dist-info" -o -name "*.egg-info" -o -name "tests" -o -name "test" \) -exec rm -rf {} + 2>/dev/null || true
+          find lambda-package -type f \( -name "*.pyc" -o -name "*.pyo" -o -name "*.md" \) -delete 2>/dev/null || true
+          find lambda-package -type f -name "*.txt" ! -name "requirements.txt" -delete 2>/dev/null || true
+          find lambda-package -type f -name "*.so" -exec strip {} \; 2>/dev/null || true
+          rm -rf lambda-package/{pytest*,moto*,_pytest*,coverage*} 2>/dev/null || true
+
+          cd lambda-package
+          zip -r ../${ZIP_NAME}.zip . -q -9
+          cd ..
+
+          echo "📊 Tamanho do pacote: $(ls -lh ${ZIP_NAME}.zip | awk '{print $5}')"
 
       - name: Deploy via AWS CLI
         env:
           FUNCTION_NAME: ${{ env.FUNCTION_NAME }}
         run: |
-          echo "🚀 Iniciando build-and-deploy da Lambda via AWS CLI..."
           TIMESTAMP=$(date +%Y-%m-%dT%H:%M:%SZ)
-          
-          # Verificar tamanho do pacote
-          PACKAGE_SIZE_BYTES=$(stat -c%s $FUNCTION_NAME.zip)
-          PACKAGE_SIZE_MB=$((PACKAGE_SIZE_BYTES / 1024 / 1024)) 
-          echo "📊 Tamanho do pacote: ${PACKAGE_SIZE_MB}MB (${PACKAGE_SIZE_BYTES} bytes)"
-          
-          echo "⬆️ Fazendo upload do pacote para S3..."
-          S3_KEY="deploy/lambda/$FUNCTION_NAME/$FUNCTION_NAME-${TIMESTAMP}.zip"
-            
-          aws s3 cp $FUNCTION_NAME.zip \
+          S3_KEY="deploy/lambda/${FUNCTION_NAME}/${FUNCTION_NAME}-${TIMESTAMP}.zip"
+
+          echo "⬆️ Upload do pacote para S3..."
+          aws s3 cp ${FUNCTION_NAME}.zip \
             s3://${{ env.S3_BUCKET_NAME }}/${S3_KEY} \
-            --region ${{ env.AWS_REGION }} \
+            --region ${{ vars.AWS_REGION }} \
             --no-progress
-            
-          echo "✅ Upload para S3 concluído: s3://${{ env.S3_BUCKET_NAME }}/${S3_KEY}"
-          echo ""
-          echo "📤 Atualizando código da função Lambda via S3..."
-            
+
+          echo "📤 Atualizando código da função Lambda..."
           aws lambda update-function-code \
             --function-name ${FUNCTION_NAME} \
             --s3-bucket ${{ env.S3_BUCKET_NAME }} \
             --s3-key ${S3_KEY} \
-            --region ${{ env.AWS_REGION }} \
+            --region ${{ vars.AWS_REGION }} \
             --no-cli-pager
-          
-          echo "⏳ Aguardando conclusão da atualização do código..."
+
+          echo "⏳ Aguardando conclusão da atualização..."
           aws lambda wait function-updated \
             --function-name ${FUNCTION_NAME} \
-            --region ${{ env.AWS_REGION }}
-          
-          echo "✅ Código atualizado com sucesso às ${TIMESTAMP}"
-          
-          echo ""
-          echo "⚙️ Atualizando configurações da Lambda..."
-          
+            --region ${{ vars.AWS_REGION }}
+
+          echo "✅ Deploy concluído com sucesso às ${TIMESTAMP}"
