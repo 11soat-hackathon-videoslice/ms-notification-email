@@ -80,8 +80,8 @@ jobs:
             
             if [ -z "$LATEST_RELEASE" ]; then
               echo "❌ ERRO: Não foi possível obter a última release"
-              echo "ℹ️  Usando fallback: main"
-              CORE_VERSION="main"
+              echo "ℹ️  Usando fallback: master"
+              CORE_VERSION="master"
             else
               CORE_VERSION="$LATEST_RELEASE"
               echo "✅ Última release encontrada: ${LATEST_RELEASE}"
@@ -391,8 +391,8 @@ jobs:
             
             if [ -z "$LATEST_RELEASE" ]; then
               echo "❌ ERRO: Não foi possível obter a última release"
-              echo "ℹ️  Usando fallback: main"
-              CORE_VERSION="main"
+              echo "ℹ️  Usando fallback: master"
+              CORE_VERSION="master"
             else
               CORE_VERSION="$LATEST_RELEASE"
               echo "✅ Última release encontrada: ${LATEST_RELEASE}"
