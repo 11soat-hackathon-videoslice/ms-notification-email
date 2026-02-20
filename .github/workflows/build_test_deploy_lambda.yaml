@@ -376,36 +376,69 @@ jobs:
             echo "✅ Autenticação HTTPS com PAT configurada"
           fi
 
-      - name: Determinar branch do video-slice-core
+      - name: Determinar versão/branch do video-slice-core
         id: determine-branch
         run: |
-          # Determinar a branch atual
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BRANCH="${{ github.head_ref }}"
-            echo "📌 Branch detectada (pull_request): ${BRANCH}"
+          # Verificar se é pull_request para master
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.base_ref }}" = "master" ]; then
+            echo "📌 Pull request para master detectado"
+            echo "🔍 Buscando última release do video-slice-core..."
+            
+            # Buscar a última release usando GitHub API
+            LATEST_RELEASE=$(curl -s -H "Authorization: token ${{ secrets.VDSC_PAT }}" \
+              "https://api.github.com/repos/11soat-hackton-videoslice/video-slice-core/releases/latest" \
+              | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+            
+            if [ -z "$LATEST_RELEASE" ]; then
+              echo "❌ ERRO: Não foi possível obter a última release"
+              echo "ℹ️  Usando fallback: main"
+              CORE_VERSION="main"
+            else
+              CORE_VERSION="$LATEST_RELEASE"
+              echo "✅ Última release encontrada: ${LATEST_RELEASE}"
+            fi
+            
+            echo "✅ Usando video-slice-core@${CORE_VERSION}"
+            
           else
-            BRANCH="${{ github.ref_name }}"
-            echo "📌 Branch detectada (push/workflow_dispatch): ${BRANCH}"
+            # Determinar a branch atual
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              BRANCH="${{ github.head_ref }}"
+              echo "📌 Branch detectada (pull_request): ${BRANCH}"
+            else
+              BRANCH="${{ github.ref_name }}"
+              echo "📌 Branch detectada (push/workflow_dispatch): ${BRANCH}"
+            fi
+            
+            # Se for develop, buscar último commit com pipeline bem-sucedida
+            if [ "${BRANCH}" = "develop" ]; then
+              echo "📌 Branch develop detectada"
+              echo "🔍 Buscando último commit com pipeline bem-sucedida no video-slice-core..."
+              
+              # Buscar workflows bem-sucedidos na branch develop
+              SUCCESSFUL_RUN=$(curl -s -H "Authorization: token ${{ secrets.VDSC_PAT }}" \
+                "https://api.github.com/repos/11soat-hackton-videoslice/video-slice-core/actions/runs?branch=develop&status=success&per_page=1" \
+                | grep -m 1 '"head_sha":' | sed -E 's/.*"([^"]+)".*/\1/')
+              
+              if [ -z "$SUCCESSFUL_RUN" ]; then
+                echo "⚠️ Aviso: Não foi possível obter o último commit bem-sucedido"
+                echo "ℹ️  Usando fallback: develop (branch)"
+                CORE_VERSION="develop"
+              else
+                CORE_VERSION="$SUCCESSFUL_RUN"
+                echo "✅ Último commit bem-sucedido encontrado: ${SUCCESSFUL_RUN}"
+              fi
+              
+              echo "✅ Usando video-slice-core@${CORE_VERSION}"
+              
+            else
+              # Para outras branches, usar a própria branch
+              CORE_VERSION="${BRANCH}"
+              echo "✅ Usando video-slice-core@${BRANCH}"
+            fi
           fi
           
-          # Mapear branch para video-slice-core
-          # Se for develop, usar develop; se for master, usar main; caso contrário, usar a mesma branch
-          case "${BRANCH}" in
-            develop)
-              CORE_BRANCH="develop"
-              echo "✅ Usando video-slice-core@develop"
-              ;;
-            master)
-              CORE_BRANCH="main"
-              echo "✅ Usando video-slice-core@master"
-              ;;
-            *)
-              CORE_BRANCH="${BRANCH}"
-              echo "✅ Usando video-slice-core@${BRANCH}"
-              ;;
-          esac
-          
-          echo "CORE_BRANCH=${CORE_BRANCH}" >> $GITHUB_OUTPUT
+          echo "CORE_VERSION=${CORE_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Configurar Python ${{ vars.PYTHON_VERSION }}
         uses: actions/setup-python@v5
