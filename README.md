@@ -7,7 +7,8 @@ Microserviço AWS Lambda para processamento de notificações por e-mail.
 
 ## 📋 Visão Geral
 
-O **ms-notification-email** é um microserviço serverless implementado como AWS Lambda Function que processa notificações por e-mail do sistema VideoSlice. Este serviço consome mensagens de uma fila SQS contendo notificações de eventos do sistema (upload, processamento, conclusão de vídeos) e envia e-mails formatados para os usuários.
+O **ms-notification-email** é um microserviço serverless implementado como AWS Lambda Function que processa notificações por e-mail do sistema VideoSlice. 
+Este serviço consome mensagens de uma fila SQS contendo notificações de eventos do sistemae envia e-mails formatados para os usuários.
 
 ### Funcionalidades
 
@@ -29,6 +30,60 @@ O microserviço segue os princípios da **Clean Architecture**, utilizando a bib
 4. **NotificationController** (da biblioteca core) processa a notificação
 5. **EmailNotificationProducer** envia o e-mail via Amazon SES
 6. **Response** retorna status de processamento
+
+Diagrama de Sequência — Notificação Web Real-time para Usuário
+
+```mermaid
+sequenceDiagram
+    autonumber
+
+    participant EB  as vdsc-prd-event-bus<br/>(EventBridge)
+    participant LMB as vdsc-prd-lmb-notification-web<br/>(Lambda)
+    participant CNG as vdsc-prd-cng-user-pool<br/>(Cognito User Pool)
+    participant SES  as vdsc-prd-ses<br/>(Simple Email Service)
+    participant USR as Usuário
+
+    Note over EB: Notificação de email recebida no Event Bus
+
+    EB  ->>  SQS : Direciona evento para a fila<br/>(regra de roteamento EventBridge)
+    SQS ->>  LMB : Trigger Lambda via SQS<br/>(batch de mensagens)
+    LMB ->>  CNG : Consulta dados do usuário<br/>(Cognito User Pool)
+    CNG -->> LMB : Retorna dados do usuário<br/>(e-mail e nome)
+    LMB ->>  SES  : Envia e-mail de notificação para usuário<br/>(Simple Email Service)
+    SES  ->>  USR : Recebe e-mail de notificação.
+```
+
+### 📧 Exemplos de Notificações por E-mail
+
+Os e-mails enviados seguem templates visuais de acordo com o status do processamento do vídeo:
+
+#### 🔄 Processando
+> Enviado quando o vídeo começa a ser processado pelo sistema.
+
+![Notificação - Processando](doc/images/vdsc_notification_web_processing.png)
+
+---
+
+#### 🔁 Retentativa Agendada
+> Enviado quando o processamento falhou temporariamente e uma nova tentativa foi agendada.
+
+![Notificação - Retentativa Agendada](doc/images/vdsc_notification_web_retrying.png)
+
+---
+
+#### ✅ Concluído
+> Enviado quando o vídeo foi processado com sucesso e os arquivos estão disponíveis para download.
+
+![Notificação - Concluído](doc/images/vdsc_notification_web_finished.png)
+
+---
+
+#### ❌ Falhou
+> Enviado quando o processamento falhou definitivamente após todas as tentativas.
+
+![Notificação - Falhou](doc/images/vdsc_notification_web_failed.png)
+
+---
 
 ## 🚀 Tecnologias
 
