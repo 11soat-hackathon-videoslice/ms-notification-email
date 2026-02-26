@@ -5,6 +5,23 @@
 
 Microserviço AWS Lambda para processamento de notificações por e-mail.
 
+## Índice
+
+- [Visão Geral](#-visão-geral)
+- [Funcionalidades](#funcionalidades)
+- [Arquitetura](#-arquitetura)
+- [Fluxo de Execução](#fluxo-de-execução)
+- [Diagrama de Sequência — Notificação Web Real-time para Usuário](#diagrama-de-sequência--notificação-web-real-time-para-usuário)
+- [Exemplos de Notificações por E-mail](#-exemplos-de-notificações-por-e-mail)
+- [Tecnologias](#-tecnologias)
+- [Dependências](#-dependências)
+- [Configuração](#-configuração)
+- [Estrutura de Mensagens](#-estrutura-de-mensagens)
+- [Testes](#-testes)
+- [Deploy](#-deploy)
+- [Integração](#-integração)
+- [Permissões IAM](#-permissões-iam)
+
 ## 📋 Visão Geral
 
 O **ms-notification-email** é um microserviço serverless implementado como AWS Lambda Function que processa notificações por e-mail do sistema VideoSlice. 
